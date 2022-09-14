@@ -1,6 +1,7 @@
 namespace TelegramBotApp;
 
-public interface ITelegramBotApplication
+public interface IApplication
 {
-    
+    public void Run();
+    public void Close();
 }

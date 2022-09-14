@@ -1,9 +1,10 @@
 using Telegram.Bot;
 using Telegram.Bot.Types;
+using TelegramBotApp.Adapters;
 
-namespace TelegramBotApp.Handlers;
+namespace TelegramBotApp.Commands;
 
 public interface ICommand
 {
-    public void Execute(ITelegramBotClient telegramBotClient, Message message);
+    public void Execute(ITelegramBotClientAdapter telegramBotClient);
 }
