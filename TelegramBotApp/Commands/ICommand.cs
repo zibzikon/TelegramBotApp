@@ -6,5 +6,5 @@ namespace TelegramBotApp.Commands;
 
 public interface ICommand
 {
-    public void Execute(ITelegramBotClientAdapter telegramBotClient);
+    public void Execute(CommandArguments? commandArguments);
 }

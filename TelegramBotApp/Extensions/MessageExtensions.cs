@@ -4,7 +4,7 @@ namespace TelegramBotApp.Extensions;
 
 public static class MessageExtensions
 {
-    public static bool IsNullOrEmpty(this Message? message)
+    public static bool IsEmpty(this Message? message)
     {
         if (message is null)
             return true;

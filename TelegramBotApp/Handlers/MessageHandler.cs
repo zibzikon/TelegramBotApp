@@ -2,12 +2,18 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotApp.Adapters;
 using TelegramBotApp.Commands;
+using TelegramBotApp.Containers;
 using TelegramBotApp.Extensions;
+using TelegramBotApp.Parsers;
 
 namespace TelegramBotApp.Handlers;
 
 public class MessageHandler : IMessageHandler
 {
+    private readonly ITelegramBotClient _telegramBotClient;
+    
+    private readonly ICommandsContainer _commandsContainer;
+
     private class MessageWaiter
     {
         public bool IsMessageWaiting { get; private set; }
@@ -38,37 +44,21 @@ public class MessageHandler : IMessageHandler
         }
     }
     
-    
     private readonly MessageWaiter _messageWaiter = new();
-
-    private readonly TelegramBotClientAdapter _telegramBotClientAdapter;
-    public MessageHandler(ITelegramBotClient telegramBotClient)
+    
+    private readonly ITextMessageParser _textMessageParser;
+    
+    public MessageHandler(ITelegramBotClient telegramBotClient, ICommandsContainer commandsContainer,
+        ITextMessageParser textMessageParser)
     {
-        _telegramBotClientAdapter = new TelegramBotClientAdapter(telegramBotClient: telegramBotClient,
-            messageHandler: this);
-    }
-
-    private bool TryGetCommandByTextMessage(string text, out ICommand? command)
-    {
-        command = null;
-        
-        switch (text)
-        {
-            case "/start": command = new StartCommand(); break;
-            case "/shutdownpc": command = new ShutdownPcCommand(); break;
-            case "/restartpc": command = new RestartPcCommand(); break;
-            case "/hidepcwindows": command = new HideAllWindowsCommand(); break;
-            case "/openfile": command = new OpenFileCommand(); break;
-            
-            default: return false;
-        }
-
-        return true;
+        _telegramBotClient = telegramBotClient;
+        _commandsContainer = commandsContainer;
+        _textMessageParser = textMessageParser;
     }
     
     public async Task HandleMessageAsync(Message message)
     {
-        if (message.IsNullOrEmpty())
+        if (message.IsEmpty())
             return;
 
         if (_messageWaiter.IsMessageWaiting)
@@ -79,13 +69,24 @@ public class MessageHandler : IMessageHandler
         
         if(message.Text is{} messageText == false) return;
         
-        if (TryGetCommandByTextMessage(messageText, out var command) == false)
+        var commandArguments = new CommandArguments(arguments:null, message);
+        
+        if (message.Text is { } textMessage&& _textMessageParser.
+                TryGetCommandArgumentsInStringMessage(textMessage, out var arguments))
         {
-            ExecuteCommand(command: new UnknownMessageCommand(), message: message);
+            commandArguments = new CommandArguments(arguments: arguments, message);
+        }
+
+        var telegramBotClientAdapter = new TelegramBotClientAdapter(_telegramBotClient, this, message);
+        
+        if (_textMessageParser.TryGetCommandInStringMessage(messageText, out var commandText) == false || 
+            _commandsContainer.TryGetCommandByTextMessage(commandText, telegramBotClientAdapter, out var command) == false)
+        {
+            ExecuteCommand(command: new UnknownMessageCommand(telegramBotClientAdapter), commandArguments: commandArguments);
             return;
         }
         
-        ExecuteCommand(command: command, message: message);
+        ExecuteCommand(command: command, commandArguments: commandArguments);
 
         await Task.CompletedTask;
     }
@@ -108,12 +109,11 @@ public class MessageHandler : IMessageHandler
         return message;
     }
 
-    private void ExecuteCommand(ICommand? command, Message message)
+    private void ExecuteCommand(ICommand? command, CommandArguments commandArguments)
     {
         if (command is null)
             throw new NullReferenceException("Command is null, but you trying to access it");
-        
-        _telegramBotClientAdapter.GoNewUpdateState(message: message);
-        command.Execute(_telegramBotClientAdapter);
+
+        command.Execute(commandArguments);
     }
 }

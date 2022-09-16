@@ -4,7 +4,7 @@ using File = Telegram.Bot.Types.File;
 namespace TelegramBotApp.Adapters;
 
 public interface ITelegramBotClientAdapter
-{
+{    
     public Message Message { get; }
     
     public Task SendTextMessageAsync(string textMessage);
