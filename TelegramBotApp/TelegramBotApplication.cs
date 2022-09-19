@@ -1,7 +1,6 @@
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotApp.Handlers;
-using TelegramBotApp.Parsers;
 
 namespace TelegramBotApp;
 
@@ -24,7 +23,6 @@ public class TelegramBotApplication : IApplication
     {
         _telegramBotClient.StartReceiving(updateHandler: UpdateHandler, 
             pollingErrorHandler: PollingErrorHandler, cancellationToken: _cancellationTokenSource.Token);
-        
     }
 
     public void Close()
@@ -39,7 +37,7 @@ public class TelegramBotApplication : IApplication
         if (message is null)
             return;
         
-        await _messageHandler.HandleMessageAsync(message);
+        await _messageHandler.HandleMessageAsync(message, cancellationToken);
     }
     
     private Task PollingErrorHandler(ITelegramBotClient telegramBotClient, Exception exception, CancellationToken cancellationToken)

@@ -5,6 +5,6 @@ namespace TelegramBotApp.Containers;
 
 public interface ICommandsContainer
 {
-     public bool TryGetCommandByTextMessage(string text, ITelegramBotClientAdapter telegramBotClientAdapter,
-        out ICommand? command);
+     public bool TryGetCommandByTextMessage(string text,
+        out ICommand command);
 }

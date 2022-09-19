@@ -2,14 +2,18 @@
 using TelegramBotApp;
 using TelegramBotApp.Containers;
 using TelegramBotApp.Handlers;
-using TelegramBotApp.Parsers;
+using TelegramBotApp.Serializers;
+
+var pathToAliasCommandsFile = @$"{AppDomain.CurrentDomain.BaseDirectory}/AliasCommands.json";
 
 var token = "5679860642:AAHt9I0kp_7s89avcF6aBGnK1yC3OLOE1Dw";
 
 ITelegramBotClient telegramBotClient = new TelegramBotClient(token);
 
+IAliasCommandSerializer aliasCommandSerializer = new AliasCommandSerializer(pathToAliasCommandsFile);
+
 IMessageHandler messageHandler = new MessageHandler(telegramBotClient: telegramBotClient, 
-    commandsContainer: new CommandsContainer(), textMessageParser: new TextMessageParser());
+    commandsContainer: new CommandsContainer(new CommandAliasesContainer(aliasCommandSerializer)));
 
 IExceptionHandler exceptionHandler = new ExceptionHandler(telegramBotClient: telegramBotClient);
 

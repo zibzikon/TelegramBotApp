@@ -1,58 +1,44 @@
 using System.Diagnostics;
-using TelegramBotApp.Adapters;
+using TelegramBotApp.Commands.Arguments;
 
 namespace TelegramBotApp.Commands;
 
 public class OpenFileCommand : ICommand
 {
-    private readonly ITelegramBotClientAdapter _telegramBotClient;
-
-    public OpenFileCommand(ITelegramBotClientAdapter telegramBotClient)
+    public async void ExecuteAsync(ICommandArguments commandArguments, CancellationToken cancellationToken = default)
     {
-        _telegramBotClient = telegramBotClient;
-    }
-    public async void Execute(CommandArguments? commandArguments)
-    {
-        if (commandArguments is not null)
-        {
-            var arguments = commandArguments.GetValueOrDefault().Arguments;
-            if (arguments is not null && arguments.Any())
-            {
-                await _telegramBotClient.SendTextMessageAsync("Invalid arguments");
-                return;
-            }
-        }
-
-        await _telegramBotClient.SendTextMessageAsync("Send file what you want to open. " +
+        var telegramBotClient = commandArguments.TelegramBotClient;
+        
+        await telegramBotClient.SendTextMessageAsync("Send file what you want to open. " +
                                                       "If you want to send photo, audio, or video make it as file");
 
-        var nextUserMessage = await _telegramBotClient.GetNextUserMessageAsync();
+        var nextUserMessage = await telegramBotClient.GetNextUserMessageAsync();
 
         if (nextUserMessage is {Document: { } document} == false)
         {
-            await _telegramBotClient.SendTextMessageAsync("Unknown message type. please send it as file");
+            await telegramBotClient.SendTextMessageAsync("Unknown message type. please send it as file");
             return;
         }
         
-        await _telegramBotClient.SendTextMessageAsync("The file has been accepted. Starting processing");
+        await telegramBotClient.SendTextMessageAsync("The file has been accepted. Starting processing");
         
         var fileId = document.FileId;
-        var fileInfo = await _telegramBotClient.GetFileAsync(fileId);
+        var fileInfo = await telegramBotClient.GetFileAsync(fileId);
         
         if(fileInfo.FilePath is {} filePath == false || document.FileName is{} fileName == false) return;
         
         await using var fileStream = File.OpenWrite(GetFileDownloadPath(fileName));
         
-        await _telegramBotClient.DownloadFileAsync(filePath: filePath, destination: fileStream);
+        await telegramBotClient.DownloadFileAsync(filePath: filePath, destination: fileStream, cancellationToken: cancellationToken);
         fileStream.Close();
 
 
-        new HideAllWindowsCommand(_telegramBotClient).Execute(null);
+        new HideAllWindowsCommand().ExecuteAsync(null, cancellationToken);
         
         var pathToFile = GetFileDownloadPath(fileName);
         var processStartInfo = new ProcessStartInfo { FileName = pathToFile, UseShellExecute = true };
         Process.Start(processStartInfo);
-        await _telegramBotClient.SendTextMessageAsync("File was opened");
+        await telegramBotClient.SendTextMessageAsync("File was opened");
     }
         
     private  string GetFileDownloadPath(string fileName)
@@ -63,32 +49,40 @@ public class OpenFileCommand : ICommand
 
 public class OpenFileByPathCommand: ICommand
 {
-    private readonly ITelegramBotClientAdapter _telegramBotClient;
+    public async void ExecuteAsync(ICommandArguments commandArguments, CancellationToken cancellationToken)
+    {
+        var telegramBotClient = commandArguments.TelegramBotClient;
 
-    public OpenFileByPathCommand(ITelegramBotClientAdapter telegramBotClient)
-    {
-        _telegramBotClient = telegramBotClient;
-    }
-    
-    public async void Execute(CommandArguments? commandArguments)
-    {
-        if (commandArguments is null || commandArguments.GetValueOrDefault().
-                TryGetArgumentValueByType("path", out var argumentValue) == false)
+        var argument = await commandArguments.GetNextArgumentAsync(
+            "Now write path to file on your computer. Correct path to file pattern is [DISKNAME:/DIRECTORYNAME/../FILENAME.exe]");
+
+        var pathToFile = argument.Message.Text;
+        
+
+        if (pathToFile == null)
         {
-            await _telegramBotClient.SendTextMessageAsync(
-                "Invalid command arguments. Correct command pattern is [ /openpath /path pathtofile]. Correct path to file pattern is [DISKNAME:/DIRECTORYNAME/../FILENAME.exe]");
+            await telegramBotClient.SetException("Invalid command arguments. Correct path to file pattern is [DISKNAME:/DIRECTORYNAME/../FILENAME.exe]");
             return;
         }
 
-        if (File.Exists(argumentValue) == false)
+        if (File.Exists(pathToFile) == false)
         {
-            await _telegramBotClient.SendTextMessageAsync("File not exists");
+            await telegramBotClient.SetException("File not exists");
             return;
         }
  
-        var processStartInfo = new ProcessStartInfo { FileName = argumentValue, UseShellExecute = true };
+        var processStartInfo = new ProcessStartInfo { FileName = pathToFile, UseShellExecute = true };
+        try
+        {
+            Process.Start(processStartInfo);
+        }
+        catch (Exception exception)
+        {
+            await telegramBotClient.SetException(exception.Message);
+            return;
+        }
         
-        Process.Start(processStartInfo);
-        await _telegramBotClient.SendTextMessageAsync("File opening process is started");
+        await telegramBotClient.SendTextMessageAsync("File opening process is started");
     }
+
 }

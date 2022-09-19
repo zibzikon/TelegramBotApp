@@ -5,20 +5,27 @@ namespace TelegramBotApp.Containers;
 
 public class CommandsContainer : ICommandsContainer
 {
-    public bool TryGetCommandByTextMessage(string text, ITelegramBotClientAdapter telegramBotClientAdapter, out ICommand? command)
+    private readonly ICommandAliasesContainer _commandAliasesContainer;
+
+    public CommandsContainer(ICommandAliasesContainer commandAliasesContainer)
     {
-        command = null;
-        
+        _commandAliasesContainer = commandAliasesContainer;
+    }
+    
+    public bool TryGetCommandByTextMessage(string text, out ICommand command)
+    {
         switch (text)
         {
-            case "start": command = new StartCommand(telegramBotClientAdapter); break;
-            case "shutdownpc": command = new ShutdownPcCommand(telegramBotClientAdapter); break;
-            case "restartpc": command = new RestartPcCommand(telegramBotClientAdapter); break;
-            case "hidepcwindows": command = new HideAllWindowsCommand(telegramBotClientAdapter); break;
-            case "openfile": command = new OpenFileCommand(telegramBotClientAdapter); break;
-            case "openpath": command = new OpenFileByPathCommand(telegramBotClientAdapter); break;
-            
-            default: return false;
+            case "/start": command = new StartCommand(); break;
+            case "/shdpc": command = new ShutdownPcCommand(); break;
+            case "/restpc": command = new RestartPcCommand(); break;
+            case "/hidepcwindows": command = new HideAllWindowsCommand(); break;
+            case "/openf": command = new OpenFileCommand(); break;
+            case "/openp": command = new OpenFileByPathCommand(); break;
+            case "/alicr": command = new CreateAliasCommand(_commandAliasesContainer); break;
+            case "/aliex": command = new ExecuteAliasCommandCommand(_commandAliasesContainer, commandsContainer: this); break;
+            case "/alidel": command = new DeleteAliasCommand(_commandAliasesContainer); break;
+            default: command = new UnknownMessageCommand(); return false;
         }
 
         return true;

@@ -2,118 +2,85 @@ using Telegram.Bot;
 using Telegram.Bot.Types;
 using TelegramBotApp.Adapters;
 using TelegramBotApp.Commands;
+using TelegramBotApp.Commands.Arguments;
 using TelegramBotApp.Containers;
 using TelegramBotApp.Extensions;
-using TelegramBotApp.Parsers;
 
 namespace TelegramBotApp.Handlers;
 
-public class MessageHandler : IMessageHandler
+public class MessageHandler : IMessageHandler , ICommandHandler
 {
     private readonly ITelegramBotClient _telegramBotClient;
     
     private readonly ICommandsContainer _commandsContainer;
 
-    private class MessageWaiter
-    {
-        public bool IsMessageWaiting { get; private set; }
-        private Message? _waitingMessage;
+    private TaskCompletionSource<Message> _waitingMessageTaskCompletionSource = new();
 
-        public bool TryGetWaitingMessage(out Message? message)
-        {
-            message = _waitingMessage;
-        
-            return _waitingMessage is not null;
-        }
+    private bool _messageWaiting = false;
     
-        public void StartWaitingMessage()
-        {
-            Reset();
-            IsMessageWaiting = true;
-        }
     
-        public void SetWaitingMessage(Message message)
-        {
-            _waitingMessage = message;
-        }
-
-        public void Reset()
-        {
-            _waitingMessage = null;
-            IsMessageWaiting = false;
-        }
-    }
-    
-    private readonly MessageWaiter _messageWaiter = new();
-    
-    private readonly ITextMessageParser _textMessageParser;
-    
-    public MessageHandler(ITelegramBotClient telegramBotClient, ICommandsContainer commandsContainer,
-        ITextMessageParser textMessageParser)
+    public MessageHandler(ITelegramBotClient telegramBotClient, ICommandsContainer commandsContainer)
     {
         _telegramBotClient = telegramBotClient;
         _commandsContainer = commandsContainer;
-        _textMessageParser = textMessageParser;
     }
     
-    public async Task HandleMessageAsync(Message message)
+    public async Task HandleMessageAsync(Message message, CancellationToken cancellationToken = default)
     {
         if (message.IsEmpty())
             return;
-
-        if (_messageWaiter.IsMessageWaiting)
+        
+        if (_messageWaiting)
         {
-            _messageWaiter.SetWaitingMessage(message);
+            _waitingMessageTaskCompletionSource.SetResult(message);
+            _waitingMessageTaskCompletionSource = new TaskCompletionSource<Message>();
             return;
         }
         
         if(message.Text is{} messageText == false) return;
-        
-        var commandArguments = new CommandArguments(arguments:null, message);
-        
-        if (message.Text is { } textMessage&& _textMessageParser.
-                TryGetCommandArgumentsInStringMessage(textMessage, out var arguments))
-        {
-            commandArguments = new CommandArguments(arguments: arguments, message);
-        }
 
-        var telegramBotClientAdapter = new TelegramBotClientAdapter(_telegramBotClient, this, message);
+        var telegramBotClientAdapter = new TelegramBotClientAdapter(_telegramBotClient, messageHandler: this, commandHandler: this, message);
+        var commandArguments = new CommandArguments(telegramBotClientAdapter, null);
+        await HandleCommandTextAsync(messageText, commandArguments, cancellationToken);
         
-        if (_textMessageParser.TryGetCommandInStringMessage(messageText, out var commandText) == false || 
-            _commandsContainer.TryGetCommandByTextMessage(commandText, telegramBotClientAdapter, out var command) == false)
-        {
-            ExecuteCommand(command: new UnknownMessageCommand(telegramBotClientAdapter), commandArguments: commandArguments);
-            return;
-        }
-        
-        ExecuteCommand(command: command, commandArguments: commandArguments);
-
         await Task.CompletedTask;
     }
 
-    public async Task<Message> GetNextUserMessageAsync()
+    public async Task<Message> GetNextUserMessageAsync(CancellationToken cancellationToken = default)
     {
-        _messageWaiter.StartWaitingMessage();
+        _messageWaiting = true;
+        var message = await _waitingMessageTaskCompletionSource.Task;
+        _messageWaiting = false;
         
-        Message? message;
-        while (_messageWaiter.TryGetWaitingMessage(out message) == false)
-        {
-            await Task.Yield();
-        }
-
         if (message is null)
             throw new InvalidProgramException("Message cannot be null");
-        
-        _messageWaiter.Reset();
         
         return message;
     }
 
-    private void ExecuteCommand(ICommand? command, CommandArguments commandArguments)
+    private static void ExecuteCommand(ICommand? command, CommandArguments commandArguments, CancellationToken cancellationToken)
     {
         if (command is null)
             throw new NullReferenceException("Command is null, but you trying to access it");
 
-        command.Execute(commandArguments);
+        command.ExecuteAsync(commandArguments, cancellationToken);
+    }
+
+    public async Task HandleCommandTextAsync(string commandText,
+        CommandArguments commandArguments, CancellationToken cancellationToken = default)
+    {
+        _ = _commandsContainer.TryGetCommandByTextMessage(commandText, out var command) == false;
+        
+        await HandleCommandAsync(command, commandArguments, cancellationToken);
+
+        await Task.CompletedTask;
+    }
+
+    public Task HandleCommandAsync(ICommand command, CommandArguments commandArguments,
+        CancellationToken cancellationToken = default)
+    {
+        ExecuteCommand(command, commandArguments, cancellationToken);
+        
+        return Task.CompletedTask;
     }
 }

@@ -1,6 +1,6 @@
 using Telegram.Bot;
 using Telegram.Bot.Types;
-using TelegramBotApp.Parsers;
+using TelegramBotApp.Handlers;
 using File = Telegram.Bot.Types.File;
 
 namespace TelegramBotApp.Adapters;
@@ -8,21 +8,30 @@ namespace TelegramBotApp.Adapters;
 public class TelegramBotClientAdapter : ITelegramBotClientAdapter
 {
     public Message Message { get; }
+
+    public ICommandHandler CommandHandler { get; }
     
     private readonly ITelegramBotClient _telegramBotClient;
 
     private readonly IMessageHandler _messageHandler;
     
-    public TelegramBotClientAdapter( ITelegramBotClient telegramBotClient, IMessageHandler messageHandler, Message message)
+    public TelegramBotClientAdapter( ITelegramBotClient telegramBotClient, IMessageHandler messageHandler,
+        ICommandHandler commandHandler, Message message)
     {
         Message = message;
         _messageHandler = messageHandler;
+        CommandHandler = commandHandler;
         _telegramBotClient = telegramBotClient;
     }
     
     public async Task SendTextMessageAsync(string textMessage)
     {
         await _telegramBotClient.SendTextMessageAsync(chatId: Message.Chat.Id, textMessage);
+    }
+
+    public async Task SetException(string exceptionText)
+    {
+        await SendTextMessageAsync($"Exception:{exceptionText}");
     }
 
     public async Task<Message> GetNextUserMessageAsync()
