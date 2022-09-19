@@ -32,7 +32,7 @@ public class CommandAliasesContainer : ICommandAliasesContainer
         if (!canBeAdded) return false;
         
         await _aliasCommandSerializer.SerializeAliasCommandsToFileAsync(_aliasCommands, cancellationToken);
-        return cancellationToken.IsCancellationRequested;
+        return !cancellationToken.IsCancellationRequested;
     }
 
     public async Task<bool> TryRemoveAliasCommandAsync(string alias, CancellationToken cancellationToken = default)
@@ -42,7 +42,7 @@ public class CommandAliasesContainer : ICommandAliasesContainer
             return false;
         
         await _aliasCommandSerializer.SerializeAliasCommandsToFileAsync(_aliasCommands ,cancellationToken);
-        return cancellationToken.IsCancellationRequested;
+        return !cancellationToken.IsCancellationRequested;
     }
     
 
